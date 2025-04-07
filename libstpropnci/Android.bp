@@ -1,0 +1,72 @@
+package {
+    default_team: "trendy_team_fwk_nfc",
+    // See: http://go/android-license-faq
+    // A large-scale-change added 'default_applicable_licenses' to import
+    // all of the 'license_kinds' from "Android-Apache-2.0"
+    // to get the below license kinds:
+    //   SPDX-license-identifier-Apache-2.0
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+/* We use headers from libstnfc-nci for the NCI protocol definitions */
+cc_library_headers {
+    name: "libstnfc-nci-headers",
+    vendor_available: true,
+    export_static_lib_headers: [
+        "libstnfc-nci",
+    ],
+    whole_static_libs: [
+        "libstnfc-nci",
+    ],
+    visibility: [
+        "//vendor/st:__subpackages__",
+    ],
+}
+
+cc_library_static {
+    name: "libstpropnci",
+    vendor_available: true,
+    local_include_dirs: [
+        "include",
+        "src",
+    ],
+    header_libs: [
+        "libstnfc-nci-headers",
+    ],
+    export_header_lib_headers: [
+        "libstnfc-nci-headers",
+    ],
+
+    export_include_dirs: [
+        "include",
+    ],
+    srcs: [
+        "src/*.cc",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wimplicit-fallthrough",
+    ],
+    stl: "libc++_static",
+    visibility: [
+        "//vendor/st:__subpackages__",
+    ],
+    product_variables: {
+        debuggable: {
+            cflags: [
+                "-DDCHECK_ALWAYS_ON",
+            ],
+        },
+    },
+    shared_libs: [
+        "libcutils",
+        "liblog",
+        "libbase",
+    ],
+    target: {
+        vendor: {
+            cflags: ["-DSTPROPNCI_VENDOR"],
+        },
+    },
+}

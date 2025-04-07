@@ -1,0 +1,5 @@
+<resources>
+	<string name="app_name">ST Extension Service</string>
+	<!-- string name="channel_name">StNfcExtensions</string -->
+	<!-- string name="channel_description">StNfcExtensions notification for NfcOemExtension service</string -->
+</resources>

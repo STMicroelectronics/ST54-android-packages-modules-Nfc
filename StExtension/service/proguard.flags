@@ -1,0 +1,2 @@
+-keep class com.st.android.nfc_extensions.** {*;}
+-verbose

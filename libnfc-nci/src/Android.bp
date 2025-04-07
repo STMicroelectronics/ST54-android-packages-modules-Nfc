@@ -1,0 +1,166 @@
+package {
+    default_team: "trendy_team_fwk_nfc",
+    // See: http://go/android-license-faq
+    // A large-scale-change added 'default_applicable_licenses' to import
+    // all of the 'license_kinds' from "Android-Apache-2.0"
+    // to get the below license kinds:
+    //   SPDX-license-identifier-Apache-2.0
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_library {
+    arch: {
+        arm: {
+            instruction_set: "arm",
+        },
+    },
+    name: "libstnfc-nci",
+    shared_libs: [
+        "libcutils",
+        "liblog",
+        "libdl",
+        "libz",
+        "libbase",
+        // Treble configuration
+        "libhidlbase",
+        "libutils",
+        "libbinder_ndk",
+        "libstatssocket",
+        "server_configurable_flags",
+        "libaconfig_storage_read_api_cc",
+    ],
+    defaults: [
+        "aconfig_lib_cc_shared_link.defaults",
+    ],
+    static_libs: [
+        "android.hardware.nfc@1.0",
+        "android.hardware.nfc@1.1",
+        "android.hardware.nfc@1.2",
+        // Add for AIDL
+        "android.hardware.nfc-V2-ndk",
+        "libstnfcutils",
+        "libstatslog_st_nfc",
+        "libnfc-nci_flags",
+    ],
+    cflags: [
+        "-DDYN_ALLOC=1",
+        "-DBUILDCFG=1",
+        "-DGKI_PTHREAD_JOINABLE",
+        "-Wall",
+        "-Werror",
+        "-Wimplicit-fallthrough",
+        "-DST21NFC",
+    ],
+    local_include_dirs: [
+        "include",
+        "gki/ulinux",
+        "gki/common",
+        "nfa/include",
+        "nfc/include",
+        "nfc_vendor_extn/include",
+    ],
+    export_include_dirs: [
+        "nfa/include",
+        "nfc/include",
+        "include",
+        "gki/ulinux",
+        "gki/common",
+        "nfc_vendor_extn/include",
+    ],
+    export_static_lib_headers: [
+        "libstnfcutils",
+    ],
+
+    srcs: [
+        "nfa/ce/*.cc",
+        "nfa/dm/*.cc",
+        "nfa/ee/*.cc",
+        "nfa/hci/*.cc",
+        "nfa/rw/*.cc",
+        "nfa/sys/*.cc",
+        "nfa/wlc/*.cc",
+        "nfc/nci/*.cc",
+        "nfa/ndefnfcee/t4t/*.cc",
+        "nfc/ndef/*.cc",
+        "nfc/nfc/*.cc",
+        "nfc/tags/*.cc",
+        "nfc_vendor_extn/*.cc",
+        "adaptation/*.cc",
+        "gki/common/*.cc",
+        "gki/ulinux/*.cc",
+    ],
+    product_variables: {
+        debuggable: {
+            cflags: [
+                "-DDCHECK_ALWAYS_ON",
+            ],
+        },
+    },
+    sanitize: {
+        misc_undefined: ["bounds"],
+        integer_overflow: true,
+        scs: true,
+    },
+    stl: "libc++_static",
+    apex_available: [
+        "//apex_available:platform",
+        // "com.android.nfcstmservices",
+    ],
+    min_sdk_version: "36",
+    visibility: [
+        "//cts:__subpackages__",
+        "//hardware/interfaces/nfc/aidl/vts/functional:__subpackages__",
+        "//vendor/st:__subpackages__",
+        "//packages/modules/Nfc:__subpackages__",
+        "//test/sts:__subpackages__",
+    ],
+}
+
+cc_library {
+    name: "libstatslog_st_nfc",
+    host_supported: true,
+    generated_sources: ["statslog_st_nfc.cpp"],
+    generated_headers: ["statslog_st_nfc.h"],
+    export_generated_headers: ["statslog_st_nfc.h"],
+    shared_libs: [
+        "libstatssocket",
+    ],
+    target: {
+        host: {
+            static_libs: [
+                "libbase",
+            ],
+        },
+        darwin: {
+            enabled: false,
+        },
+    },
+    apex_available: [
+        "//apex_available:platform",
+        // "com.android.nfcstmservices",
+    ],
+    min_sdk_version: "36",
+    visibility: [
+        "//hardware/interfaces/nfc/aidl/vts/functional:__subpackages__",
+        "//vendor/st:__subpackages__",
+        "//packages/modules/Nfc:__subpackages__",
+    ],
+}
+
+genrule {
+    name: "statslog_st_nfc.h",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --header $(genDir)/statslog_st_nfc.h --module nfc --namespace nfc,stats",
+    out: [
+        "statslog_st_nfc.h",
+    ],
+}
+
+genrule {
+    name: "statslog_st_nfc.cpp",
+    tools: ["stats-log-api-gen"],
+    cmd: "$(location stats-log-api-gen) --cpp $(genDir)/statslog_st_nfc.cpp --module nfc --namespace nfc,stats --importHeader statslog_st_nfc.h",
+    out: [
+        "statslog_st_nfc.cpp",
+    ],
+}

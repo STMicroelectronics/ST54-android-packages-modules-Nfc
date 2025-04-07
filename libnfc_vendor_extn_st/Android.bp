@@ -1,0 +1,56 @@
+package {
+    default_team: "trendy_team_fwk_nfc",
+    // See: http://go/android-license-faq
+    // A large-scale-change added 'default_applicable_licenses' to import
+    // all of the 'license_kinds' from "Android-Apache-2.0"
+    // to get the below license kinds:
+    //   SPDX-license-identifier-Apache-2.0
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_library {
+    name: "libnfc_vendor_extn_st",
+    srcs: [
+        "src/*.cc",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wimplicit-fallthrough",
+        "-fvisibility=hidden",
+    ],
+    product_variables: {
+        debuggable: {
+            cflags: [
+                "-DDCHECK_ALWAYS_ON",
+            ],
+        },
+    },
+    arch: {
+        arm: {
+            instruction_set: "arm",
+        },
+    },
+    stl: "libc++_static",
+    visibility: [
+        "//vendor/st:__subpackages__",
+    ],
+    local_include_dirs: [
+        "src",
+    ],
+    static_libs: [
+        "libstpropnci",
+    ],
+    shared_libs: [
+        "libcutils",
+        "liblog",
+        "libbase",
+        "libutils",
+        "libhidlbase",
+        "libbinder_ndk",
+        "android.hardware.nfc@1.0",
+        "android.hardware.nfc@1.1",
+        "android.hardware.nfc@1.2",
+        "android.hardware.nfc-V2-ndk",
+    ],
+}
