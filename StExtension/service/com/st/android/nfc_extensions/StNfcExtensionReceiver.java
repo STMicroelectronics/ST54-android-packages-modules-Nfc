@@ -18,7 +18,6 @@ package com.st.android.nfc_extensions;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.nfc.NfcOemExtension;
 import android.util.Log;
 
 import java.util.Objects;
@@ -28,7 +27,8 @@ public class StNfcExtensionReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (Objects.equals(intent.getAction(), NfcOemExtension.ACTION_OEM_EXTENSION_INIT)) {
+        /* NfcOemExtension.ACTION_OEM_EXTENSION_INIT is not part of the system API, so we use the hardcoded name */
+        if (Objects.equals(intent.getAction(), "android.nfc.action.OEM_EXTENSION_INIT")) {
             Log.i(TAG, "onReceive() - ACTION_OEM_EXTENSION_INIT");
             Intent serviceIntent = new Intent(context, StNfcExtensionService.class);
             context.startService(serviceIntent);

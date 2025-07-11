@@ -7,26 +7,40 @@
 ######################################################################
 
 ################################################
-## Configuration for ST NFC packages
+# ST NFC - mandatory packages to fully support NFC chipsets
 PRODUCT_PACKAGES += \
-    libstnfc_nci_jni \
-    Nfc_st \
+    libnfc_vendor_extn_st \
+
+# Configure ST nfc_vendor_extn for legacy devices upgrading (older HAL)
+PRODUCT_SYSTEM_PROPERTIES += \
+   persist.nfc_vendor_extn.lib_file_name=libnfc_vendor_extn_st.so \
+
+# Feature supported by ST and not part of default AOSP
+PRODUCT_COPY_FILES += \
+   frameworks/native/data/etc/com.nxp.mifare.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/com.nxp.mifare.xml:st \
+
+# copy libnfc-nci.conf to product/etc/ to take priority over default config
+ifneq ($(strip $(TARGET_BUILD_VARIANT)),user)
+   PRODUCT_COPY_FILES += \
+      vendor/st/opensource/commonsys/packages/modules/Nfc/libnfc-nci-conf/libnfc-nci.conf:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf:st
+else
+   PRODUCT_COPY_FILES += \
+      vendor/st/opensource/commonsys/packages/modules/Nfc/libnfc-nci-conf/libnfc-nci.conf.user:$(TARGET_COPY_OUT_PRODUCT)/etc/libnfc-nci.conf:st
+endif
+
+################################################
+# ST NFC - optional packages to have access to additional features (extensions)
+# For the extensions to be usable, at minimum enable_oem_extension=true overlay is required.
+PRODUCT_PACKAGES += \
     StNfcExtensionService \
     com.st.android.nfc_extensions \
     com.st.android.nfc_extensions.xml \
-    libnfc_vendor_extn_st \
-
-PRODUCT_COPY_FILES += \
-   frameworks/native/data/etc/com.nxp.mifare.xml:$(TARGET_COPY_OUT_SYSTEM_EXT)/etc/permissions/com.nxp.mifare.xml:st \
+    NfcOverlaySt \
 
 ################################################
-## NFC Forum testing support (Analog / Digital / TagOp / LLCP/SNEP)
+## NFC Forum testing support (Analog / Digital / TagOp)
 ## The following package can be safely removed if you don t plan to use DTA:
-PRODUCT_PACKAGES += \
-   StDta
-
-# ################################################
-# ## Factory tests support
-# PRODUCT_PACKAGES += \
-#    libstfactory \
-#    stfactorydemo \
+ifneq ($(strip $(TARGET_BUILD_VARIANT)),user)
+   PRODUCT_PACKAGES += \
+      StDta
+endif

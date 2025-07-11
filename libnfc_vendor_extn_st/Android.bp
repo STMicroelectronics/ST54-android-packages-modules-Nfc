@@ -18,6 +18,7 @@ cc_library {
         "-Werror",
         "-Wimplicit-fallthrough",
         "-fvisibility=hidden",
+        "-DST21NFC",
     ],
     product_variables: {
         debuggable: {
@@ -40,6 +41,10 @@ cc_library {
     ],
     static_libs: [
         "libstpropnci",
+        "android.hardware.nfc@1.0",
+        "android.hardware.nfc@1.1",
+        "android.hardware.nfc@1.2",
+        "android.hardware.nfc-V2-ndk",
     ],
     shared_libs: [
         "libcutils",
@@ -48,9 +53,5 @@ cc_library {
         "libutils",
         "libhidlbase",
         "libbinder_ndk",
-        "android.hardware.nfc@1.0",
-        "android.hardware.nfc@1.1",
-        "android.hardware.nfc@1.2",
-        "android.hardware.nfc-V2-ndk",
     ],
 }

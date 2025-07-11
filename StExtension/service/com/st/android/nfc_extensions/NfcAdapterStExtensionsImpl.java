@@ -18,7 +18,10 @@ package com.st.android.nfc_extensions;
 import android.os.IBinder;
 import android.util.Log;
 
+import com.st.android.nfc_extensions.StNfcOemExtension.PipeInfo;
+
 import java.util.List;
+import java.util.Map;
 
 public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
     private static final String TAG = "NfcAdapterStExtensionsImpl";
@@ -62,34 +65,34 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
     @Override
     @Deprecated
     public int loopback() {
-        Log.w(TAG, "loopback() -  Deprecated API, nothing done");
+        Log.w(TAG, "loopback: Deprecated API, nothing done");
         return 0;
     }
 
     @Override
     @Deprecated
     public boolean getHceCapability() {
-        Log.w(TAG, "getHceCapability() -  Deprecated API, nothing done");
+        Log.w(TAG, "getHceCapability: Deprecated API, nothing done");
         return true;
     }
 
     @Override
     @Deprecated
     public void setRfConfiguration(int modeBitmap, byte[] techArray) {
-        Log.w(TAG, "setRfConfiguration() -  Deprecated API, nothing done");
+        Log.w(TAG, "setRfConfiguration: Deprecated API, nothing done");
     }
 
     @Override
     @Deprecated
     public int getRfConfiguration(byte[] techArray) {
-        Log.w(TAG, "getRfConfiguration() -  Deprecated API, nothing done");
+        Log.w(TAG, "getRfConfiguration: Deprecated API, nothing done");
         return 0;
     }
 
     @Override
     @Deprecated
     public void setRfBitmap(int modeBitmap) {
-        Log.w(TAG, "setRfBitmap() -  Deprecated API, nothing done");
+        Log.w(TAG, "setRfBitmap: Deprecated API, nothing done");
     }
 
     @Override
@@ -108,21 +111,45 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
 
     @Override
     public int getPipesList(int hostId, byte[] list) {
-        // TODO
-        Log.e(TAG, "getPipesList() not supported yet");
-        return -1;
+        Map<Byte, List<PipeInfo>> pipesMap = mStNfcOemExtension.retrievePipesList();
+        for (var entry : pipesMap.entrySet()) {
+            if (hostId == (entry.getKey() & 0xFF)) {
+                List<PipeInfo> pipesInfo = entry.getValue();
+                int idx = 0;
+                for (var pipeInfo : pipesInfo) {
+                    list[idx] = (byte) pipeInfo.pipeId;
+                    idx++;
+                }
+                return pipesInfo.size();
+            }
+        }
+        return 0;
     }
 
     @Override
     public void getPipeInfo(int hostId, int pipeId, byte[] info) {
-        // TODO
-        Log.e(TAG, "getPipeInfo() not supported yet");
+        Map<Byte, List<PipeInfo>> pipesMap = mStNfcOemExtension.retrievePipesList();
+        for (var entry : pipesMap.entrySet()) {
+            if (hostId == (entry.getKey() & 0xFF)) {
+                List<PipeInfo> pipesInfo = entry.getValue();
+                int idx = 0;
+                for (var pipeInfo : pipesInfo) {
+                    if (pipeInfo.pipeId == pipeId) {
+                        info[0] = (byte) pipeInfo.pipeState;
+                        info[1] = (byte) pipeInfo.sourceHost;
+                        info[2] = (byte) pipeInfo.sourceGate;
+                        info[3] = (byte) pipeInfo.destHost;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     @Override
     @Deprecated
     public byte[] getATR() {
-        Log.w(TAG, "getATR() -  Deprecated API, nothing done");
+        Log.w(TAG, "getATR: Deprecated API, nothing done");
         return null;
     }
 
@@ -140,53 +167,54 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
 
     @Deprecated
     public boolean disconnectEE(int cee_id) {
-        Log.i(TAG, "disconnectEE() -  Deprecated, nothing done");
+        Log.i(TAG, "disconnectEE: Deprecated, nothing done");
         return false;
     }
 
     @Deprecated
     public int connectGate(int host_id, int gate_id) {
-        Log.w(TAG, "connectGate() -  Deprecated API, nothing done");
+        Log.w(TAG, "connectGate: Deprecated API, nothing done");
         return 0;
     }
 
     @Deprecated
     public byte[] transceive(int pipe_id, int hciCmd, byte[] dataIn) {
-        Log.w(TAG, "transceive() -  Deprecated API, nothing done");
+        Log.w(TAG, "transceive: Deprecated API, nothing done");
         return null;
     }
 
     @Deprecated
     public void disconnectGate(int pipe_id) {
-        Log.w(TAG, "disconnectGate() -  Deprecated API, nothing done");
+        Log.w(TAG, "disconnectGate: Deprecated API, nothing done");
     }
 
     @Deprecated
     public void setNciConfig(int param_id, byte[] param) {
-        Log.w(TAG, "setNciConfig() -  Deprecated API, nothing done");
+        Log.w(TAG, "setNciConfig: Deprecated API, nothing done");
     }
 
     @Deprecated
     public byte[] getNciConfig(int param_id) {
-        Log.w(TAG, "getNciConfig() -  Deprecated API, nothing done");
+        Log.w(TAG, "getNciConfig: Deprecated API, nothing done");
         return null;
     }
 
+    @Deprecated
     public int getAvailableHciHostList(byte[] nfceeId, byte[] conInfo) {
         // TODO
-        Log.e(TAG, "getAvailableHciHostList() not supported yet");
+        Log.e(TAG, "getAvailableHciHostList: Deprecated API, nothing done");
         return -1;
     }
 
     @Deprecated
     public boolean getBitPropConfig(int configId, int byteNb, int bitNb) {
-        Log.w(TAG, "getBitPropConfig() -  Deprecated API, nothing done");
+        Log.w(TAG, "getBitPropConfig: Deprecated API, nothing done");
         return false;
     }
 
     @Deprecated
     public void setBitPropConfig(int configId, int byteNb, int bitNb, boolean status) {
-        Log.w(TAG, "setBitPropConfig() -  Deprecated API, nothing done");
+        Log.w(TAG, "setBitPropConfig: Deprecated API, nothing done");
     }
 
     public void forceRouting(int nfceeId, int power) {
@@ -254,8 +282,8 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
             byte[] nfcid1,
             byte rats,
             byte[] histBytes) {
-        // TODO
-        Log.e(TAG, "programHceParameters() not supported yet");
+        mStNfcOemExtension.programHceParameters(
+                setConfig, bitFrameSdd, platformConfig, selInfo, nfcid1, rats, histBytes);
     }
 
     @Override
@@ -280,5 +308,15 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
     public INfcNdefNfceeAdapter getNfcNdefNfceeAdapterInterface() {
         Log.e(TAG, "getNfcNdefNfceeAdapterInterface() is deprecated");
         return null;
+    }
+
+    @Override
+    public byte[] getNfceeIdList() {
+        return mStNfcOemExtension.getNfceeList();
+    }
+
+    @Override
+    public SdkVersion getServiceSdkVersion() {
+        return new SdkVersion();
     }
 }

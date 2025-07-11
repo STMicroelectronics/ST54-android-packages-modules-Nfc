@@ -8,15 +8,17 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-/* We use headers from libstnfc-nci for the NCI protocol definitions */
 cc_library_headers {
-    name: "libstnfc-nci-headers",
+    name: "libstnfc-nci-headers-system",
     vendor_available: true,
-    export_static_lib_headers: [
-        "libstnfc-nci",
-    ],
-    whole_static_libs: [
-        "libstnfc-nci",
+    export_include_dirs: [
+        "libstnfc-nci-headers/src/nfa/include",
+        "libstnfc-nci-headers/src/nfc/include",
+        "libstnfc-nci-headers/src/include",
+        "libstnfc-nci-headers/src/gki/ulinux",
+        "libstnfc-nci-headers/src/gki/common",
+        "libstnfc-nci-headers/src/nfc_vendor_extn/include",
+        "libstnfc-nci-headers/utils/include",
     ],
     visibility: [
         "//vendor/st:__subpackages__",
@@ -31,10 +33,10 @@ cc_library_static {
         "src",
     ],
     header_libs: [
-        "libstnfc-nci-headers",
+        "libstnfc-nci-headers-system",
     ],
     export_header_lib_headers: [
-        "libstnfc-nci-headers",
+        "libstnfc-nci-headers-system",
     ],
 
     export_include_dirs: [
@@ -47,6 +49,7 @@ cc_library_static {
         "-Wall",
         "-Werror",
         "-Wimplicit-fallthrough",
+        "-DST21NFC",
     ],
     stl: "libc++_static",
     visibility: [

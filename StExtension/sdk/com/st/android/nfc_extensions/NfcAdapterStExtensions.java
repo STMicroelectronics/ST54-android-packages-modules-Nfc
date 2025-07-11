@@ -26,7 +26,6 @@ import android.os.RemoteException;
 import android.util.Log;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -69,6 +68,21 @@ public final class NfcAdapterStExtensions {
                         Log.i(TAG, "onServiceConnected() - component: " + name.flattenToString());
                         mNfcAdapterStExtInterface =
                                 INfcAdapterStExtensions.Stub.asInterface(service);
+                        try {
+                            if (!SdkVersion.checkSdkCompatibility(
+                                    getServiceSdkVersion(), new SdkVersion())) {
+                                Log.w(
+                                        TAG,
+                                        "onServiceConnected() - SdkCompatibility check failed, you"
+                                                + " may experience API issues");
+                            }
+                        } catch (Exception e) {
+                            Log.w(
+                                    TAG,
+                                    "onServiceConnected() - SdkCompatibility check failed, you may"
+                                            + " experience API issues ",
+                                    e);
+                        }
                         mConnectionCb.onServiceConnected();
                     }
 
@@ -106,7 +120,7 @@ public final class NfcAdapterStExtensions {
         Log.i(
                 TAG,
                 "connectToService() - NfcAdapterStExtensions(sdk version"
-                        + " 25Q2-BP2A-20250405-Gen-25W14p0) binding requested:"
+                        + " 25Q2-BP2A-20250518-Mainline-25W21p0) binding requested:"
                         + bindingRequestedSuccessfully);
     }
 
@@ -225,89 +239,12 @@ public final class NfcAdapterStExtensions {
         return null;
     }
 
-    public static final String HCI_HOST_UICC1 = "SIM1";
-    public static final String HCI_HOST_UICC2 = "SIM2";
-    public static final String HCI_HOST_ESE = "ESE";
-    public static final String HCI_HOST_EUICCSE = "eUICC-SE";
-    public static final String HCI_HOST_DHSE = "DHSE";
-    public static final String HCI_HOST_ACTIVE = "ACTIVE";
-    public static final String HCI_HOST_INACTIVE = "INACTIVE";
-    public static final String HCI_HOST_UNRESPONSIVE = "UNRESPONSIVE";
-
-    public static final int NFA_EE_MAX_EE_SUPPORTED = 5;
-
+    @Deprecated
     public Map<String, String> getAvailableHciHostList() throws RemoteException {
-        if (mNfcAdapterStExtInterface == null) {
-            throw new RemoteException("Disconnected from service");
-        }
-        Map<String, String> result = new HashMap<String, String>();
-        byte[] nfceeId = new byte[NFA_EE_MAX_EE_SUPPORTED];
-        byte[] conInfo = new byte[NFA_EE_MAX_EE_SUPPORTED];
-        int nbHost = 0;
-        int i;
 
-        Log.i(TAG, "getAvailableHciHostList()");
-
-        nbHost = mNfcAdapterStExtInterface.getAvailableHciHostList(nfceeId, conInfo);
-
-        for (i = 0; i < nbHost; i++) {
-            Log.i(
-                    TAG,
-                    "getHostList() - nfceeId["
-                            + i
-                            + "] = "
-                            + nfceeId[i]
-                            + ", conInfo["
-                            + i
-                            + "] = "
-                            + conInfo[i]);
-        }
-
-        String nfcee;
-        String status;
-
-        for (i = 0; i < nbHost; i++) {
-            nfcee = "";
-            status = "";
-
-            switch (nfceeId[i]) {
-                case (byte) 0x81:
-                    nfcee = HCI_HOST_UICC1;
-                    break;
-
-                case (byte) 0x82:
-                    nfcee = HCI_HOST_ESE;
-                    break;
-
-                case (byte) 0x83:
-                case (byte) 0x85:
-                    nfcee = HCI_HOST_UICC2;
-                    break;
-
-                case (byte) 0x84:
-                    nfcee = HCI_HOST_DHSE;
-                    break;
-                case (byte) 0x86:
-                    nfcee = HCI_HOST_EUICCSE;
-                    break;
-            }
-
-            switch (conInfo[i]) {
-                case 0x00: // Active
-                    status = HCI_HOST_ACTIVE;
-                    break;
-                case 0x01: // Inactive
-                    status = HCI_HOST_INACTIVE;
-                    break;
-                case 0x02: // Unresponsive
-                    status = HCI_HOST_UNRESPONSIVE;
-                    break;
-            }
-
-            result.put(nfcee, status);
-        }
-
-        return result;
+        // DEPRECATED
+        Log.e(TAG, "getAvailableHciHostList() is not supported anymore");
+        return null;
     }
 
     /**
@@ -641,5 +578,20 @@ public final class NfcAdapterStExtensions {
         Log.e(TAG, "not supported anymore, use AOSP framework methods to interact with NDEF-NFCEE");
 
         return null;
+    }
+
+    public byte[] getNfceeIdList() throws RemoteException {
+        if (mNfcAdapterStExtInterface == null) {
+            throw new RemoteException("Disconnected from service");
+        }
+        return mNfcAdapterStExtInterface.getNfceeIdList();
+    }
+
+    public SdkVersion getServiceSdkVersion() throws RemoteException {
+        if (mNfcAdapterStExtInterface == null) {
+            throw new RemoteException("Disconnected from service");
+        }
+        Log.i(TAG, "getServiceSdkVersion()");
+        return mNfcAdapterStExtInterface.getServiceSdkVersion();
     }
 }

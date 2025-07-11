@@ -35,6 +35,41 @@ static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 
 /*******************************************************************************
 **
+** Function         nves_dump
+**
+** Description      Dump at VERBOSE level the messages in and out of the wrapper
+**
+** Returns          none
+**
+*******************************************************************************/
+#define DUMP_CHUNK_SZ 100
+static void nves_dump(bool upperlayer, bool dir_to_nfcc, uint8_t* payload,
+                      uint16_t payloadlen) {
+  const char* prefixLayer = upperlayer ? "UL" : "";
+  const char* prefixDirFirst = dir_to_nfcc ? "Tx" : "Rx";
+  const char* prefixDirCont = dir_to_nfcc ? "tx" : "rx";
+  char buf[DUMP_CHUNK_SZ * 3 + 1];
+  int offset = 0, i;
+
+  do {
+    int len = payloadlen - offset;
+    if (len > DUMP_CHUNK_SZ) len = DUMP_CHUNK_SZ;
+
+    for (i = 0; i < len; i++) {
+      sprintf(buf + 3 * i, "%02hhx ", payload[offset + i]);
+    }
+    buf[3 * i - 1] = '\0';  // remove training space
+
+    LOG(VERBOSE) << StringPrintf("%s: %s%s %s", __func__, prefixLayer,
+                                 (offset == 0) ? prefixDirFirst : prefixDirCont,
+                                 buf);
+
+    offset += len;
+  } while (offset < payloadlen);
+}
+
+/*******************************************************************************
+**
 ** Function         nves_stpropnci_cb
 **
 ** Description      After processing, we send output message to HAL or
@@ -45,11 +80,9 @@ static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 *******************************************************************************/
 static void nves_stpropnci_cb(bool dir_to_nfcc, uint8_t* payload,
                               uint16_t payloadlen) {
-  LOG(VERBOSE) << StringPrintf("%s: dir:%d hdr:%02hhx%02hhx%02hhx", __func__,
-                               dir_to_nfcc, payload[0], payload[1], payload[2]);
-
   if (dir_to_nfcc == MSG_DIR_TO_NFCC) {
     /* write to HAL */
+    nves_dump(false, true, payload, payloadlen);
     if (pVendorExtnCb->hidlHal != nullptr) {
       LOG(VERBOSE) << StringPrintf("%s: to HIDL");
       ::android::hardware::nfc::V1_0::NfcData data;
@@ -65,6 +98,7 @@ static void nves_stpropnci_cb(bool dir_to_nfcc, uint8_t* payload,
     }
   } else {
     /* Emulate cb from HAL */
+    nves_dump(true, false, payload, payloadlen);
     if (pVendorExtnCb->pDataCback != nullptr) {
       LOG(VERBOSE) << StringPrintf("%s: to STACK");
       pVendorExtnCb->pDataCback(payloadlen, payload);
@@ -90,7 +124,10 @@ extern "C" tNFC_STATUS vendor_nfc_handle_event(NfcExtEvent_t event,
 extern "C" tNFC_STATUS vendor_nfc_handle_event(NfcExtEvent_t event,
                                                NfcExtEventData_t data) {
   tNFC_STATUS ret = NFC_STATUS_OK;
-  LOG(VERBOSE) << StringPrintf("%s: Enter event: %d", __func__, event);
+  if ((event != HANDLE_VENDOR_NCI_MSG) &&
+      (event != HANDLE_VENDOR_NCI_RSP_NTF) && (event != HANDLE_HAL_EVENT)) {
+    LOG(VERBOSE) << StringPrintf("%s: Enter event: %d", __func__, event);
+  }
   (void)pthread_mutex_lock(&mtx);
   if (pVendorExtnCb == nullptr) {
     LOG(ERROR) << "Vendor_nfc not initialized";
@@ -101,6 +138,7 @@ extern "C" tNFC_STATUS vendor_nfc_handle_event(NfcExtEvent_t event,
   switch (event) {
     case HANDLE_VENDOR_NCI_MSG:
       // called from processCmd.
+      nves_dump(true, true, data.nci_msg.p_data, data.nci_msg.data_len);
       if (stpropnci_process(MSG_DIR_FROM_STACK, data.nci_msg.p_data,
                             data.nci_msg.data_len)) {
         ret = NFCSTATUS_EXTN_FEATURE_SUCCESS;
@@ -109,14 +147,39 @@ extern "C" tNFC_STATUS vendor_nfc_handle_event(NfcExtEvent_t event,
 
     case HANDLE_VENDOR_NCI_RSP_NTF:
       // called from processCmd.
+      nves_dump(false, false, data.nci_rsp_ntf.p_data,
+                data.nci_rsp_ntf.data_len);
       if (stpropnci_process(MSG_DIR_FROM_NFCC, data.nci_rsp_ntf.p_data,
                             data.nci_rsp_ntf.data_len)) {
         ret = NFCSTATUS_EXTN_FEATURE_SUCCESS;
       }
       break;
 
+    case HANDLE_HAL_EVENT:
+      LOG(VERBOSE) << StringPrintf("%s: enter HAL event: %d", __func__,
+                                   data.hal_event);
+      switch (data.hal_event) {
+        case HAL_NFC_OPEN_CPLT_EVT:
+          if (pVendorExtnCb->aidlHal != nullptr) {
+            int32_t halVer = 0;
+            pVendorExtnCb->aidlHal->getInterfaceVersion(&halVer);
+            LOG(DEBUG) << StringPrintf("%s: HAL AIDL v%d", __func__, halVer);
+            if (halVer >= 2) {
+              stpropnci_st_set_hal_passthrough();
+            }
+          }
+          break;
+
+        default:
+          // no special handling
+          break;
+      }
+      break;
+
     default:
-      // no action at the moment..
+      // vendor_nfc_handle_event is never called with other actions at the
+      // moment..
+      LOG(DEBUG) << StringPrintf("Unexpected event: %d", event);
       break;
   }
 
@@ -181,10 +244,11 @@ extern "C" bool vendor_nfc_init(VendorExtnCb* cb) {
 ** Returns          none
 **
 *******************************************************************************/
-extern "C" void vendor_nfc_de_init() __attribute__((visibility("default")));
-extern "C" void vendor_nfc_de_init() {
+extern "C" bool vendor_nfc_de_init() __attribute__((visibility("default")));
+extern "C" bool vendor_nfc_de_init() {
   (void)pthread_mutex_lock(&mtx);
   stpropnci_deinit();
   pVendorExtnCb = nullptr;
   (void)pthread_mutex_unlock(&mtx);
+  return true;
 }

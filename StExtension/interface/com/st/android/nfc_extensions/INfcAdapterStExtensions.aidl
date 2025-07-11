@@ -22,6 +22,7 @@ import com.st.android.nfc_extensions.INfcSettingsAdapter;
 import com.st.android.nfc_extensions.INfcWalletAdapter;
 import com.st.android.nfc_extensions.INfcStExtensionsRestartCb;
 import com.st.android.nfc_extensions.INfcNdefNfceeAdapter;
+import com.st.android.nfc_extensions.SdkVersion;
 
 /**
   * {@hide}
@@ -89,4 +90,7 @@ interface INfcAdapterStExtensions {
     void unregisterNfcStackRestartCb();
 
     INfcNdefNfceeAdapter getNfcNdefNfceeAdapterInterface();
+    byte[] getNfceeIdList();
+
+    SdkVersion getServiceSdkVersion();
 }
