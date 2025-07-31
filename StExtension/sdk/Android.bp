@@ -18,29 +18,29 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-java_library {
-    name: "com.st.android.nfc_extensions",
-    installable: true,
+// java_library {
+//     name: "com.st.android.nfc_extensions",
+//     installable: true,
 
-    proprietary: false,
-    owner: "st",
-    system_ext_specific: false,
+//     proprietary: false,
+//     owner: "st",
+//     system_ext_specific: false,
 
-    srcs: [
-        "**/*.java",
-    ],
-    static_libs: [
-        "com.st.android.nfc_extensions-interface",
-    ],
-    sdk_version: "current",
-    min_sdk_version: "36",
-}
+//     srcs: [
+//         "**/*.java",
+//     ],
+//     static_libs: [
+//         "com.st.android.nfc_extensions-interface",
+//     ],
+//     sdk_version: "current",
+//     min_sdk_version: "36",
+// }
 
-prebuilt_etc {
-    name: "com.st.android.nfc_extensions.xml",
-    src: "com.st.android.nfc_extensions.xml",
-    proprietary: false,
-    owner: "st",
-    sub_dir: "permissions",
-    system_ext_specific: false,
-}
+// prebuilt_etc {
+//     name: "com.st.android.nfc_extensions.xml",
+//     src: "com.st.android.nfc_extensions.xml",
+//     proprietary: false,
+//     owner: "st",
+//     sub_dir: "permissions",
+//     system_ext_specific: false,
+// }

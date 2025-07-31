@@ -91,7 +91,7 @@ public class NfcWalletAdapterImpl extends INfcWalletAdapter.Stub {
     public boolean unregisterNfceeActionNtfCallback() {
         Log.i(TAG, "unregisterNfceeActionNtfCallback");
         mStNfcOemExtension.unregisterNfceeActionNtfCallback();
-        return false;
+        return true;
     }
 
     public boolean registerIntfActivatedNtfCallback(IIntfActivatedNtfCallback cb) {
@@ -251,4 +251,8 @@ public class NfcWalletAdapterImpl extends INfcWalletAdapter.Stub {
     //     Log.i(TAG, "unregisterCeApduCallback");
     //     mStNfcOemExtension.closeApduGate();
     // }
+
+    public boolean setRfCustomPollingFrames(byte[] rf_frames) {
+        return mStNfcOemExtension.setRfCustomPollingFrames(rf_frames);
+    }
 }

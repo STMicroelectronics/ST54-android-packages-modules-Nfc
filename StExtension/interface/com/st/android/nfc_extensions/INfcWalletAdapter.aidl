@@ -157,4 +157,5 @@ interface INfcWalletAdapter
     // boolean openApduGate();
     // byte[] transceiveApduGate(in byte[] data);
     // void closeApduGate();
+    boolean setRfCustomPollingFrames(in byte[] rf_frames);
 }

@@ -300,4 +300,34 @@ public final class NfcWalletAdapter {
     //     }
     //     mNfcWalletInterface.closeApduGate();
     // }
+
+    public boolean setRfCustomPollingFrames(RfFrameEntry[] rf_frames) throws RemoteException {
+        if (mNfcWalletInterface == null) {
+            throw new RemoteException("Disconnected from service");
+        }
+        if (rf_frames.length > 4) {
+            throw new RemoteException("Too many RF frames, max 4");
+        }
+        if ((rf_frames == null) || (rf_frames.length == 0)) {
+            Log.i(TAG, "setRfCustomPollingFrames: disable");
+            byte[] data = new byte[] {(byte) 0x00};
+            mNfcWalletInterface.setRfCustomPollingFrames(data);
+        } else {
+            int payload_len = 1;
+            for (int i = 0; i < rf_frames.length; i++) {
+                payload_len += rf_frames[i].getRfFrameAsTlv().length;
+            }
+            Log.i(TAG, "setRfCustomPollingFrames: enable, nb frames=" + rf_frames.length);
+            byte[] payload = new byte[payload_len];
+            payload[0] = (byte) rf_frames.length;
+            int idx = 1;
+            for (int i = 0; i < rf_frames.length; i++) {
+                byte[] tlv = rf_frames[i].getRfFrameAsTlv();
+                System.arraycopy(tlv, 0, payload, idx, tlv.length);
+                idx += tlv.length;
+            }
+            return mNfcWalletInterface.setRfCustomPollingFrames(payload);
+        }
+        return false;
+    }
 }

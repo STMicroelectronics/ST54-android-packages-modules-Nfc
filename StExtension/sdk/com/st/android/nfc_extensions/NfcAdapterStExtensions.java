@@ -17,11 +17,7 @@
  */
 package com.st.android.nfc_extensions;
 
-import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
-import android.content.ServiceConnection;
-import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.Log;
 
@@ -37,6 +33,26 @@ public final class NfcAdapterStExtensions {
     /* Connection to StNfcExtensionService */
     private INfcAdapterStExtensions mNfcAdapterStExtInterface = null;
     private Context mContext = null;
+
+    private StNfcOemExtension mStNfcOemExtension;
+
+    private INfcAdapterStExtensions.Stub mINfcAdapterStExtensionsBinder;
+    private NfcAdapterStExtensionsImpl mNfcAdapterStExtensionsImpl;
+
+    private class srvStNfcOemExtensionVendorNtfCallback
+            implements StNfcOemExtension.StNfcOemExtensionVendorNtfCallback {
+        public void onVendorNciNotification(int gid, int oid, byte[] payload) {
+            Log.d(
+                    TAG,
+                    "srvStNfcOemExtensionVendorNtfCallback:  g="
+                            + Integer.toHexString(gid)
+                            + ", o="
+                            + Integer.toHexString(oid)
+                            + ", payload="
+                            + StNfcOemExtension.bytesToString(payload));
+            // Do nothing at the moment
+        }
+    }
 
     public interface NfcAdapterStExtensionsServiceConnection {
         public void onServiceConnected();
@@ -61,67 +77,115 @@ public final class NfcAdapterStExtensions {
     }
 
     public void connectToService() {
-        ServiceConnection connection =
-                new ServiceConnection() {
-                    @Override
-                    public void onServiceConnected(ComponentName name, IBinder service) {
-                        Log.i(TAG, "onServiceConnected() - component: " + name.flattenToString());
-                        mNfcAdapterStExtInterface =
-                                INfcAdapterStExtensions.Stub.asInterface(service);
-                        try {
-                            if (!SdkVersion.checkSdkCompatibility(
-                                    getServiceSdkVersion(), new SdkVersion())) {
-                                Log.w(
-                                        TAG,
-                                        "onServiceConnected() - SdkCompatibility check failed, you"
-                                                + " may experience API issues");
+        Log.d(TAG, "connectToService");
+        mStNfcOemExtension = new StNfcOemExtension();
+        mNfcAdapterStExtensionsImpl = new NfcAdapterStExtensionsImpl(mStNfcOemExtension);
+        mNfcAdapterStExtInterface = mNfcAdapterStExtensionsImpl;
+        mStNfcOemExtension.register(mContext, new srvStNfcOemExtensionVendorNtfCallback());
+
+        new Thread(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    if (!SdkVersion.checkSdkCompatibility(
+                                            getServiceSdkVersion(), new SdkVersion())) {
+                                        Log.w(
+                                                TAG,
+                                                "connectToService() - SdkCompatibility check"
+                                                        + " failed, you may experience API issues");
+                                    }
+                                } catch (Exception e) {
+                                    Log.w(
+                                            TAG,
+                                            "connectToService() - SdkCompatibility check failed,"
+                                                    + " you may experience API issues ",
+                                            e);
+                                }
+                                mConnectionCb.onServiceConnected();
                             }
-                        } catch (Exception e) {
-                            Log.w(
-                                    TAG,
-                                    "onServiceConnected() - SdkCompatibility check failed, you may"
-                                            + " experience API issues ",
-                                    e);
-                        }
-                        mConnectionCb.onServiceConnected();
-                    }
+                        })
+                .start();
 
-                    @Override
-                    public void onServiceDisconnected(ComponentName name) {
-                        Log.i(
-                                TAG,
-                                "onServiceDisconnected() - component: " + name.flattenToString());
-                        mNfcAdapterStExtInterface = null;
-                        mConnectionCb.onServiceDisconnected();
-                    }
-                };
+        // ServiceConnection connection =
+        //         new ServiceConnection() {
+        //             @Override
+        //             public void onServiceConnected(ComponentName name, IBinder service) {
+        //                 Log.i(TAG, "onServiceConnected() - component: " +
+        // name.flattenToString());
+        //                 mNfcAdapterStExtInterface =
+        //                         INfcAdapterStExtensions.Stub.asInterface(service);
+        //                 try {
+        //                     if (!SdkVersion.checkSdkCompatibility(
+        //                             getServiceSdkVersion(), new SdkVersion())) {
+        //                         Log.w(
+        //                                 TAG,
+        //                                 "onServiceConnected() - SdkCompatibility check failed,
+        // you"
+        //                                         + " may experience API issues");
+        //                     }
+        //                 } catch (Exception e) {
+        //                     Log.w(
+        //                             TAG,
+        //                             "onServiceConnected() - SdkCompatibility check failed, you
+        // may"
+        //                                     + " experience API issues ",
+        //                             e);
+        //                 }
+        //                 mConnectionCb.onServiceConnected();
+        //             }
 
-        // The value returned by bindSearch() only indicates whether binding was
-        // successfully
-        // initiated, based on preliminary checks like whether the service exists and
-        // whether the
-        // caller has the necessary permissions to bind. Binding is not complete until
-        // ServiceConnection#onServiceConnected() is called.
-        //
-        // Binding is asynchronous. However, the process that calls onServiceConnected()
-        // gets queued
-        // and is likely to (eventually) be run by the same thread that called
-        // bindService().
-        // Because of that, it is not possible to block the thread that calls
-        // bindService() until
-        // onServiceConnected() is called.
-        boolean bindingRequestedSuccessfully =
-                mContext.bindService(
-                        new Intent("com.st.android.nfc_extensions.StNfcExtensionService.BIND")
-                                .setPackage("com.st.android.nfc_extensions"),
-                        connection,
-                        Context.BIND_AUTO_CREATE);
+        //             @Override
+        //             public void onServiceDisconnected(ComponentName name) {
+        //                 Log.i(
+        //                         TAG,
+        //                         "onServiceDisconnected() - component: " +
+        // name.flattenToString());
+        //                 mNfcAdapterStExtInterface = null;
+        //                 mConnectionCb.onServiceDisconnected();
+        //             }
+        //         };
 
-        Log.i(
-                TAG,
-                "connectToService() - NfcAdapterStExtensions(sdk version"
-                        + " 25Q2-BP2A-20250518-Mainline-25W21p0) binding requested:"
-                        + bindingRequestedSuccessfully);
+        // // The value returned by bindSearch() only indicates whether binding was
+        // // successfully
+        // // initiated, based on preliminary checks like whether the service exists and
+        // // whether the
+        // // caller has the necessary permissions to bind. Binding is not complete until
+        // // ServiceConnection#onServiceConnected() is called.
+        // //
+        // // Binding is asynchronous. However, the process that calls onServiceConnected()
+        // // gets queued
+        // // and is likely to (eventually) be run by the same thread that called
+        // // bindService().
+        // // Because of that, it is not possible to block the thread that calls
+        // // bindService() until
+        // // onServiceConnected() is called.
+        // boolean bindingRequestedSuccessfully =
+        //         mContext.bindService(
+        //                 new Intent("com.st.android.nfc_extensions.StNfcExtensionService.BIND")
+        //                         .setPackage("com.st.android.nfc_extensions"),
+        //                 connection,
+        //                 Context.BIND_AUTO_CREATE);
+
+        // Log.i(
+        //         TAG,
+        //         "connectToService() - NfcAdapterStExtensions(sdk version
+        // 25Q2-BP2A-20250727-Mainline-25W31p0) binding requested:"
+        //                 + bindingRequestedSuccessfully);
+    }
+
+    public void disconnectFromService() {
+        if (mStNfcOemExtension != null) {
+            try {
+                mStNfcOemExtension.unregister();
+
+                Log.i(TAG, "disconnectFromService() - unregistered");
+            } catch (IllegalArgumentException e) {
+                Log.w(TAG, "disconnectFromService() - unregister failed", e);
+            }
+            mStNfcOemExtension = null;
+            mConnectionCb.onServiceDisconnected();
+        }
     }
 
     /**
@@ -137,7 +201,12 @@ public final class NfcAdapterStExtensions {
         byte[] result = null;
         result = mNfcAdapterStExtInterface.getFirmwareVersion();
 
+        if (result.length < 4) {
+            Log.e(TAG, "getFirmwareVersion: Invalid result length: " + result.length);
+            throw new RemoteException("Invalid firmware version response");
+        }
         FwVersion fwVersion = new FwVersion(result);
+
         return fwVersion;
     }
 
@@ -207,7 +276,7 @@ public final class NfcAdapterStExtensions {
         }
         Log.i(TAG, "getPipesInfo() - for host " + hostId);
         int nbPipes = 0;
-        byte[] list = new byte[10];
+        byte[] list = new byte[20];
         byte[] info = new byte[5];
 
         nbPipes = mNfcAdapterStExtInterface.getPipesList(hostId, list);
@@ -593,5 +662,16 @@ public final class NfcAdapterStExtensions {
         }
         Log.i(TAG, "getServiceSdkVersion()");
         return mNfcAdapterStExtInterface.getServiceSdkVersion();
+    }
+
+    public static final int STOP_DISCOVERY = 1;
+    public static final int START_DISCOVERY = 2;
+
+    public byte[] sendVendorNciMessage(byte[] cmd, int discFlags) throws RemoteException {
+        if (mNfcAdapterStExtInterface == null) {
+            throw new RemoteException("Disconnected from service");
+        }
+        Log.i(TAG, "getServiceSdkVersion()");
+        return mNfcAdapterStExtInterface.sendVendorNciMessage(cmd, discFlags);
     }
 }

@@ -23,7 +23,7 @@ import android.util.Log;
 
 public class SdkVersion implements Parcelable {
     /* This version will be updated when AIDL is changed */
-    public static int CURRENT_API_VERSION = 1;
+    public static int CURRENT_API_VERSION = 2;
 
     /* The remaining should be constant */
 

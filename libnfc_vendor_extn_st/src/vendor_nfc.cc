@@ -20,6 +20,7 @@
 
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
+#include <nfc_config.h>
 #include <android/log.h>
 #include <log/log.h>
 
@@ -84,26 +85,26 @@ static void nves_stpropnci_cb(bool dir_to_nfcc, uint8_t* payload,
     /* write to HAL */
     nves_dump(false, true, payload, payloadlen);
     if (pVendorExtnCb->hidlHal != nullptr) {
-      LOG(VERBOSE) << StringPrintf("%s: to HIDL");
+      LOG(VERBOSE) << StringPrintf("%s: to HIDL", __func__);
       ::android::hardware::nfc::V1_0::NfcData data;
       data.setToExternal(payload, payloadlen);
       pVendorExtnCb->hidlHal->write(data);
     } else if (pVendorExtnCb->aidlHal != nullptr) {
       int ret;
-      LOG(VERBOSE) << StringPrintf("%s: to AIDL");
+      LOG(VERBOSE) << StringPrintf("%s: to AIDL", __func__);
       std::vector<uint8_t> aidl_data(payload, payload + payloadlen);
       pVendorExtnCb->aidlHal->write(aidl_data, &ret);
     } else {
-      LOG(ERROR) << StringPrintf("%s: no HAL interface available");
+      LOG(ERROR) << StringPrintf("%s: no HAL interface available", __func__);
     }
   } else {
     /* Emulate cb from HAL */
     nves_dump(true, false, payload, payloadlen);
     if (pVendorExtnCb->pDataCback != nullptr) {
-      LOG(VERBOSE) << StringPrintf("%s: to STACK");
+      LOG(VERBOSE) << StringPrintf("%s: to STACK", __func__);
       pVendorExtnCb->pDataCback(payloadlen, payload);
     } else {
-      LOG(ERROR) << StringPrintf("%s: no HAL cb interface available");
+      LOG(ERROR) << StringPrintf("%s: no HAL cb interface available", __func__);
     }
   }
 }
@@ -197,11 +198,25 @@ extern "C" tNFC_STATUS vendor_nfc_handle_event(NfcExtEvent_t event,
 ** Returns          none
 **
 *******************************************************************************/
-extern "C" void vendor_nfc_on_config_update(std::map<std::string, ConfigValue>*)
+extern "C" void vendor_nfc_on_config_update(
+    std::map<std::string, ConfigValue>* config)
     __attribute__((visibility("default")));
 extern "C" void vendor_nfc_on_config_update(
-    std::map<std::string, ConfigValue>*) {
+    std::map<std::string, ConfigValue>* config) {
   LOG(VERBOSE) << StringPrintf("%s: enter ", __func__);
+
+  // T4T_NFCEE_ENABLE didn't exist in Android <= 15,
+  // but this config is required to be set to 1 to support T4t feature via AOSP
+  // API. HIDL does not define t4tNfceeEnable, but AIDL v1 defines it always 0.
+  // We need to remove this key if present in the map,
+  // so libnfc-nci.conf can define the value to 1 if needed (ST54L upgrade
+  // devices)
+  if (config->erase(NAME_T4T_NFCEE_ENABLE) > 0) {
+    LOG(VERBOSE) << StringPrintf(
+        "%s: Found T4T_NFCEE_ENABLE from HAL, removed so libnfc-nci.conf "
+        "can overwrite it",
+        __func__);
+  }
 }
 
 /*******************************************************************************

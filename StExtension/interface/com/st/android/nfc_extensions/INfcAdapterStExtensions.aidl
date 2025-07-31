@@ -93,4 +93,6 @@ interface INfcAdapterStExtensions {
     byte[] getNfceeIdList();
 
     SdkVersion getServiceSdkVersion();
+
+    byte[] sendVendorNciMessage(in byte[] cmd, int discFlags);
 }

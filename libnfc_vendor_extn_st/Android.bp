@@ -18,7 +18,6 @@ cc_library {
         "-Werror",
         "-Wimplicit-fallthrough",
         "-fvisibility=hidden",
-        "-DST21NFC",
     ],
     product_variables: {
         debuggable: {
@@ -45,6 +44,7 @@ cc_library {
         "android.hardware.nfc@1.1",
         "android.hardware.nfc@1.2",
         "android.hardware.nfc-V2-ndk",
+        "libstnfcutils",
     ],
     shared_libs: [
         "libcutils",

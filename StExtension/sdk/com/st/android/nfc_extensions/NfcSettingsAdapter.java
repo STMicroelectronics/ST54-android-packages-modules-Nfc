@@ -154,6 +154,7 @@ public class NfcSettingsAdapter {
     public static final String ESE_ROUTE = "eSE";
     public static final String HCE_ROUTE = "HCE";
     public static final String DEFAULT_ROUTE = "Default";
+    public static final String UNSET_ROUTE = "Unset";
 
     /**
      * Set listen mode routing table configuration for Default Route. routeLoc is parameter which
@@ -186,10 +187,15 @@ public class NfcSettingsAdapter {
 
             Log.d(TAG, "setUserDefaultRoutes:" + routeKey + ": " + routeValue);
 
+            if ((DEFAULT_MIFARE_ROUTE.contentEquals(routeKey) == true)
+                    || (DEFAULT_FELICA_ROUTE.contentEquals(routeKey) == true)) {
+                Log.w(TAG, "setUserDefaultRoutes:" + routeKey + " is deprecated");
+                continue;
+            }
+
             if ((DEFAULT_AID_ROUTE.contentEquals(routeKey) == false)
-                    && (DEFAULT_MIFARE_ROUTE.contentEquals(routeKey) == false)
                     && (DEFAULT_ISO_DEP_ROUTE.contentEquals(routeKey) == false)
-                    && (DEFAULT_FELICA_ROUTE.contentEquals(routeKey) == false)
+                    // && (DEFAULT_FELICA_ROUTE.contentEquals(routeKey) == false)
                     && (DEFAULT_AB_TECH_ROUTE.contentEquals(routeKey) == false)
                     && (DEFAULT_SC_ROUTE.contentEquals(routeKey) == false)) {
                 Log.e(TAG, "setUserDefaultRoutes:" + routeKey + " does not exists");
@@ -199,8 +205,8 @@ public class NfcSettingsAdapter {
             if ((UICC_ROUTE.contentEquals(routeValue) == false)
                     && (ESE_ROUTE.contentEquals(routeValue) == false)
                     && (HCE_ROUTE.contentEquals(routeValue) == false)
-                    && (DEFAULT_ROUTE.contentEquals(routeValue)) == false) {
-
+                    && (DEFAULT_ROUTE.contentEquals(routeValue) == false)
+                    && (UNSET_ROUTE.contentEquals(routeValue) == false)) {
                 Log.e(TAG, "setUserDefaultRoutes:" + routeValue + " does not exists");
                 throw new IOException(routeValue + " does not exists");
             }

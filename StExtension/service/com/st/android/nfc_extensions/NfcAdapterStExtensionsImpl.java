@@ -319,4 +319,9 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
     public SdkVersion getServiceSdkVersion() {
         return new SdkVersion();
     }
+
+    @Override
+    public byte[] sendVendorNciMessage(byte[] cmd, int discFlags) {
+        return mStNfcOemExtension.sendVendorNciMessage(cmd, discFlags);
+    }
 }

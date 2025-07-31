@@ -8,7 +8,7 @@
     <bool name="enable_secure_nfc_support">true</bool>
     <bool name="nfc_observe_mode_supported">true</bool>
     <bool name="nfc_proprietary_getcaps_supported">true</bool>
-    <bool name="enable_oem_extension">true</bool>
+    <bool name="enable_oem_extension">false</bool>
     <bool name="enable_euicc_support">true</bool>
 
     <integer name="toast_debounce_time_ms">2000</integer>

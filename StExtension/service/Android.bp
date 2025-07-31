@@ -18,28 +18,28 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-android_app {
-    name: "StNfcExtensionService",
-    certificate: "platform",
-    sdk_version: "system_current",
-    privileged: true,
-    privapp_allowlist: ":privapp_allowlist_StNfcExtensionService.xml",
-    srcs: [
-        "**/*.java",
-    ],
-    resource_dirs: ["res"],
-    static_libs: [
-        "com.st.android.nfc_extensions-interface",
-        // for notifications
-        //"androidx.appcompat_appcompat",
-    ],
-    aaptflags: ["--auto-add-overlay"],
-    optimize: {
-        proguard_flags_files: ["proguard.flags"],
-    },
-}
+// android_app {
+//     name: "StNfcExtensionService",
+//     certificate: "platform",
+//     sdk_version: "system_current",
+//     privileged: true,
+//     privapp_allowlist: ":privapp_allowlist_StNfcExtensionService.xml",
+//     srcs: [
+//         "**/*.java",
+//     ],
+//     resource_dirs: ["res"],
+//     static_libs: [
+//         "com.st.android.nfc_extensions-interface",
+//         // for notifications
+//         //"androidx.appcompat_appcompat",
+//     ],
+//     aaptflags: ["--auto-add-overlay"],
+//     optimize: {
+//         proguard_flags_files: ["proguard.flags"],
+//     },
+// }
 
-filegroup {
-    name: "privapp_allowlist_StNfcExtensionService.xml",
-    srcs: ["StNfcExtensionService.xml"],
-}
+// filegroup {
+//     name: "privapp_allowlist_StNfcExtensionService.xml",
+//     srcs: ["StNfcExtensionService.xml"],
+// }

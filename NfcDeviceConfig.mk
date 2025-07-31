@@ -30,11 +30,8 @@ endif
 
 ################################################
 # ST NFC - optional packages to have access to additional features (extensions)
-# For the extensions to be usable, at minimum enable_oem_extension=true overlay is required.
 PRODUCT_PACKAGES += \
-    StNfcExtensionService \
     com.st.android.nfc_extensions \
-    com.st.android.nfc_extensions.xml \
     NfcOverlaySt \
 
 ################################################
