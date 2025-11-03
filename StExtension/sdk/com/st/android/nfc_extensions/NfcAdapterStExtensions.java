@@ -18,6 +18,7 @@
 package com.st.android.nfc_extensions;
 
 import android.content.Context;
+import android.nfc.NfcAdapter;
 import android.os.RemoteException;
 import android.util.Log;
 
@@ -39,6 +40,11 @@ public final class NfcAdapterStExtensions {
     private INfcAdapterStExtensions.Stub mINfcAdapterStExtensionsBinder;
     private NfcAdapterStExtensionsImpl mNfcAdapterStExtensionsImpl;
 
+    private boolean mAppNtfCbRegistered = false;
+    ;
+    private int mAppNtfCbOid;
+    private StNfcOemExtension.StNfcOemExtensionVendorNtfCallback mAppNtfCb;
+
     private class srvStNfcOemExtensionVendorNtfCallback
             implements StNfcOemExtension.StNfcOemExtensionVendorNtfCallback {
         public void onVendorNciNotification(int gid, int oid, byte[] payload) {
@@ -50,7 +56,10 @@ public final class NfcAdapterStExtensions {
                             + Integer.toHexString(oid)
                             + ", payload="
                             + StNfcOemExtension.bytesToString(payload));
-            // Do nothing at the moment
+            // send to app if requested
+            if (mAppNtfCbRegistered && (mAppNtfCbOid == oid)) {
+                mAppNtfCb.onVendorNciNotification(gid, oid, payload);
+            }
         }
     }
 
@@ -78,8 +87,12 @@ public final class NfcAdapterStExtensions {
 
     public void connectToService() {
         Log.d(TAG, "connectToService");
-        mStNfcOemExtension = new StNfcOemExtension();
-        mNfcAdapterStExtensionsImpl = new NfcAdapterStExtensionsImpl(mStNfcOemExtension);
+        if (NfcAdapter.getDefaultAdapter(mContext) == null) {
+            Log.e(TAG, "Cannot get NfcAdapter, is NFC supported? Aborting connection attempt.");
+            return;
+        }
+        mStNfcOemExtension = StNfcOemExtension.getInstance();
+        mNfcAdapterStExtensionsImpl = NfcAdapterStExtensionsImpl.getInstance(mStNfcOemExtension);
         mNfcAdapterStExtInterface = mNfcAdapterStExtensionsImpl;
         mStNfcOemExtension.register(mContext, new srvStNfcOemExtensionVendorNtfCallback());
 
@@ -170,8 +183,19 @@ public final class NfcAdapterStExtensions {
         // Log.i(
         //         TAG,
         //         "connectToService() - NfcAdapterStExtensions(sdk version
-        // 25Q2-BP2A-20250727-Mainline-25W31p0) binding requested:"
+        // 25Q2-BP2A-20251010-Mainline-25W41p0) binding requested:"
         //                 + bindingRequestedSuccessfully);
+    }
+
+    public void registerVendorNciNtfCallback(
+            int oid, StNfcOemExtension.StNfcOemExtensionVendorNtfCallback appNtfCb) {
+        mAppNtfCbRegistered = true;
+        mAppNtfCbOid = oid;
+        mAppNtfCb = appNtfCb;
+    }
+
+    public void unregisterVendorNciNtfCallback() {
+        mAppNtfCbRegistered = false;
     }
 
     public void disconnectFromService() {
@@ -235,12 +259,11 @@ public final class NfcAdapterStExtensions {
      *
      * @param status True if the Tag Detector shall be enabled and false otherwise.
      */
-    @Deprecated
-    public void setTagDetectorStatus(boolean status) {
+    public void setTagDetectorStatus(boolean status) throws RemoteException {
         Log.i(TAG, "setTagDetectorStatus()");
-
-        // do we need this ? please contact ST if you use it.
-        Log.e(TAG, "not supported yet");
+        if (mNfcAdapterStExtInterface != null) {
+            mNfcAdapterStExtInterface.setTagDetectorStatus(status);
+        }
     }
 
     /**
@@ -250,14 +273,12 @@ public final class NfcAdapterStExtensions {
      *
      * @return true if the tag detector is enabled and false otherwise.
      */
-    @Deprecated
-    public boolean getTagDetectorStatus() {
+    public boolean getTagDetectorStatus() throws RemoteException {
         boolean status = false;
         Log.i(TAG, "getTagDetectorStatus()");
-
-        // do we need this ? please contact ST if you use it.
-        Log.e(TAG, "not supported yet");
-
+        if (mNfcAdapterStExtInterface != null) {
+            status = mNfcAdapterStExtInterface.getTagDetectorStatus();
+        }
         return (status);
     }
 

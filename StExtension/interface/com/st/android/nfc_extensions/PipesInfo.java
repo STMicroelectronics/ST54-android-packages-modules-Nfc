@@ -209,6 +209,9 @@ public class PipesInfo {
             case (byte) 0xF0:
                 gateName = " - APDU";
                 break;
+            default:
+                gateName = " - Unknwon";
+                break;
         }
         item.sourceGate += gateName;
         if (DBG) Log.i(tag, "setPipeInfo() - source gate is " + item.sourceGate);

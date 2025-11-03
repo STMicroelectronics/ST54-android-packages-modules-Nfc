@@ -38,6 +38,9 @@ public class HwInfo {
      */
     public HwInfo(byte[] result) {
         switch (result[CHIP_ID_IDX]) {
+            case 8:
+                this.chipId = "ST25RN300";
+                break;
             case 7:
                 this.chipId = "ST21NFCL";
                 break;

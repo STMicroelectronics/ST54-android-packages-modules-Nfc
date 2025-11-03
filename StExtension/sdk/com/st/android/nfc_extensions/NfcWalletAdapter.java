@@ -92,11 +92,13 @@ public final class NfcWalletAdapter {
         return result;
     }
 
-    @Deprecated
     public boolean setSEFelicaCardEnabled(boolean status) throws RemoteException {
-        // DEPRECATED
-        Log.e(TAG, "not supported anymore");
-        return false;
+        if (mNfcWalletInterface == null) {
+            throw new RemoteException("Disconnected from service");
+        }
+        boolean result = false;
+        result = mNfcWalletInterface.setSEFelicaCardEnabled(status);
+        return result;
     }
 
     public boolean registerNfceeActionNtfCallback(INfceeActionNtfCallback cb)

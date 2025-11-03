@@ -95,4 +95,7 @@ interface INfcAdapterStExtensions {
     SdkVersion getServiceSdkVersion();
 
     byte[] sendVendorNciMessage(in byte[] cmd, int discFlags);
+
+    void setTagDetectorStatus(boolean status);
+    boolean getTagDetectorStatus();
 }

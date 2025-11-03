@@ -36,7 +36,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.RemoteException;
-import android.os.SystemProperties;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -56,8 +55,28 @@ public final class StNfcOemExtension {
     ManufacturerData mManufacturerData = null;
     private boolean mIsInit = false;
     private boolean mIsPermAlwaysOnGranted = false;
+    private int mRegisterCnt = 0;
 
-    public StNfcOemExtension() {}
+    // Manage concurrency on goToIdle calls
+    private Object mSyncDiscovery = new Object();
+    private static final int DISC_STATE_UNMANAGED = 0;
+    private static final int DISC_STATE_GOING_TO_IDLE = 1;
+    private static final int DISC_STATE_IDLE = 2;
+    private static final int DISC_STATE_GOING_TO_RESUME = 3;
+    private static final int DISC_STATE_RESUMED_BEFORE_REQ = 4;
+    private int mDiscoveryState = DISC_STATE_UNMANAGED;
+    private boolean mIsDiscoveryStarted = false;
+    private boolean mHasSetAlwaysOn = false;
+
+    private StNfcOemExtension() {}
+
+    private static class Singleton {
+        private static final StNfcOemExtension INSTANCE = new StNfcOemExtension();
+    }
+
+    public static StNfcOemExtension getInstance() {
+        return Singleton.INSTANCE;
+    }
 
     private boolean StOemCheckStateAndLibVersion(int minversion) {
         /* As the version is reset to -1 when changing from STATE_ON, we just need to check the version here */
@@ -100,6 +119,9 @@ public final class StNfcOemExtension {
                 case NfcAdapter.STATE_TURNING_OFF:
                     stateString = "STATE_TURNING_OFF";
                     break;
+                default:
+                    stateString = "STATE_unknown";
+                    break;
             }
             Log.d(TAG, "StNfcOemExtensionCallback.onStateUpdated: " + stateString);
             if ((state == NfcAdapter.STATE_ON) && !mIsInit) {
@@ -107,6 +129,7 @@ public final class StNfcOemExtension {
                 mIsInit = true;
             } else if (state == NfcAdapter.STATE_TURNING_OFF) {
                 mHandler.sendEmptyMessage(MSG_PROCESS_STATE_TURNING_OFF);
+                mIsInit = false;
             }
         }
 
@@ -296,6 +319,54 @@ public final class StNfcOemExtension {
                     TAG,
                     "StNfcOemExtensionCallback.onRfDiscoveryStarted(" + isDiscoveryStarted + ")");
 
+            synchronized (mSyncDiscovery) {
+                mIsDiscoveryStarted = isDiscoveryStarted;
+                if (mDiscoveryState == DISC_STATE_GOING_TO_IDLE) {
+                    if (mIsDiscoveryStarted) {
+                        // discovery started while we asked to stop polling ?
+                        Log.d(
+                                TAG,
+                                "StNfcOemExtensionCallback.onRfDiscoveryStarted unexpected while"
+                                        + " DISC_STATE_GOING_TO_IDLE");
+                    } else {
+                        mDiscoveryState = DISC_STATE_IDLE;
+                    }
+                } else if (mDiscoveryState == DISC_STATE_IDLE) {
+                    if (mIsDiscoveryStarted) {
+                        // discovery started while we asked to stop polling ?
+                        Log.d(
+                                TAG,
+                                "StNfcOemExtensionCallback.onRfDiscoveryStarted Discovery restarted"
+                                        + " without request from extensions");
+                        mDiscoveryState = DISC_STATE_RESUMED_BEFORE_REQ;
+                    } else {
+                        Log.d(
+                                TAG,
+                                "StNfcOemExtensionCallback.onRfDiscoveryStarted unexpected while"
+                                        + " DISC_STATE_IDLE");
+                    }
+                } else if (mDiscoveryState == DISC_STATE_GOING_TO_RESUME) {
+                    if (mIsDiscoveryStarted) {
+                        mDiscoveryState = DISC_STATE_UNMANAGED;
+                        mSyncDiscovery.notifyAll();
+                    } else {
+                        Log.d(
+                                TAG,
+                                "StNfcOemExtensionCallback.onRfDiscoveryStarted unexpected while"
+                                        + " DISC_STATE_GOING_TO_RESUME");
+                    }
+                } else if (mDiscoveryState == DISC_STATE_RESUMED_BEFORE_REQ) {
+                    if (mIsDiscoveryStarted) {
+                        Log.d(
+                                TAG,
+                                "StNfcOemExtensionCallback.onRfDiscoveryStarted unexpected while"
+                                        + " DISC_STATE_RESUMED_BEFORE_REQ");
+                    } else {
+                        mDiscoveryState = DISC_STATE_IDLE;
+                    }
+                }
+            }
+
             if (isDiscoveryStarted) {
                 if (mCardSwitchMonitorRunnable != null) {
                     Log.d(
@@ -468,6 +539,7 @@ public final class StNfcOemExtension {
      */
     private class StNfcVendorNciCallback implements NfcAdapter.NfcVendorNciCallback {
         public Object mSync;
+        public int expectedGid;
         public int expectedOid;
 
         public boolean expectingRsp;
@@ -482,7 +554,8 @@ public final class StNfcOemExtension {
             mSync = new Object();
         }
 
-        public void setExpectedRspOID(int oid, boolean ntf) {
+        public void setExpectedRspOID(int gid, int oid, boolean ntf) {
+            expectedGid = gid;
             expectedOid = oid;
             expectingRsp = true;
             expectedRspPayload = null;
@@ -494,6 +567,7 @@ public final class StNfcOemExtension {
 
         public void clearExpectedNtf() {
             expectingNtf = false;
+            expectedGid = -1;
             expectedOid = -1;
         }
 
@@ -503,11 +577,14 @@ public final class StNfcOemExtension {
                 mSync.wait(timeout);
                 expectingRsp = false;
                 if (!expectingNtf) {
+                    expectedGid = -1;
                     expectedOid = -1;
                 }
                 return expectedRspPayload;
             } catch (InterruptedException e) {
-
+                Log.e(TAG, "StNfcVendorNciCallback.getExpectedRsp : interrupted");
+                // Restore interrupted flag
+                Thread.currentThread().interrupt();
             }
             return null;
         }
@@ -521,7 +598,9 @@ public final class StNfcOemExtension {
                 expectingNtf = false;
                 return expectedNtfPayload;
             } catch (InterruptedException e) {
-
+                Log.e(TAG, "StNfcVendorNciCallback.getExpectedNtf : interrupted");
+                // Restore interrupted flag
+                Thread.currentThread().interrupt();
             }
             return null;
         }
@@ -534,10 +613,10 @@ public final class StNfcOemExtension {
                             + convertCommandToString(
                                     (gid & 0xFF), (oid & 0xFF), 0x00, payload, false));
             synchronized (mSync) {
-                if (expectingRsp && expectedOid == oid) {
+                if (expectingRsp && (expectedOid == oid) && (expectedGid == (gid & 0xF))) {
                     expectingRsp = false;
                     expectedRspPayload = payload;
-                    mSync.notify();
+                    mSync.notifyAll();
                 } else {
                     Log.d(TAG, "StNfcVendorNciCallback.onVendorNciResponse: !!!!unexpected!!!!");
                     unexpectedRspPayload = payload;
@@ -553,10 +632,10 @@ public final class StNfcOemExtension {
                             + convertCommandToString(
                                     (gid & 0xF), (oid & 0xFF), 0x00, payload, false));
             synchronized (mSync) {
-                if (expectingNtf && expectedOid == oid) {
+                if (expectingNtf && (expectedOid == oid) && (expectedGid == (gid & 0xF))) {
                     expectingNtf = false;
                     expectedNtfPayload = payload;
-                    mSync.notify();
+                    mSync.notifyAll();
                 } else {
                     Log.d(TAG, "StNfcVendorNciCallback.onVendorNciNotification: unexpected");
                     unexpectedNtfPayload = payload;
@@ -584,8 +663,6 @@ public final class StNfcOemExtension {
 
     private StNfcOemExtensionVendorNtfCallback mNtfCb;
 
-    private boolean mHasSetAlwaysOn = false;
-
     private class StControllerAlwaysOnListener implements NfcAdapter.ControllerAlwaysOnListener {
         public Object mSync;
         public boolean mEnabled = false;
@@ -601,73 +678,153 @@ public final class StNfcOemExtension {
                 Log.d(TAG, "onControllerAlwaysOnChanged: isEnabled=" + isEnabled);
                 mEnabled = isEnabled;
                 mUpdated = true;
-                mSync.notify();
+                mSync.notifyAll();
             }
         }
     }
 
     private void enterAlwaysOn() {
-        if (!mHasSetAlwaysOn) {
-            synchronized (mStControllerAlwaysOnListenerCb.mSync) {
-                mStControllerAlwaysOnListenerCb.mUpdated = false;
-                mNfcOemExtension.setControllerAlwaysOnMode(
-                        NfcOemExtension.ENABLE_DEFAULT /* TRANSPARENT */);
+        synchronized (mSyncDiscovery) {
+            while (mHasSetAlwaysOn) {
+                Log.d(TAG, "enterAlwaysOn: waiting other sequence to finish");
                 try {
-                    mStControllerAlwaysOnListenerCb.mSync.wait(2000);
+                    mSyncDiscovery.wait();
                 } catch (InterruptedException e) {
-
-                }
-                if (!mStControllerAlwaysOnListenerCb.mUpdated
-                        || !mStControllerAlwaysOnListenerCb.mEnabled) {
-                    Log.e(TAG, "enterAlwaysOn: Failed to set alwayson mode in 2sec");
+                    // This thread was interrupted, exit directly
+                    Log.e(TAG, "enterAlwaysOn: Interrupted!");
+                    Thread.currentThread().interrupt();
+                    return;
                 }
             }
             mHasSetAlwaysOn = true;
         }
+
+        synchronized (mStControllerAlwaysOnListenerCb.mSync) {
+            mStControllerAlwaysOnListenerCb.mUpdated = false;
+            mNfcOemExtension.setControllerAlwaysOnMode(
+                    NfcOemExtension.ENABLE_DEFAULT /* TRANSPARENT */);
+            try {
+                mStControllerAlwaysOnListenerCb.mSync.wait(2000);
+            } catch (InterruptedException e) {
+                Log.e(TAG, "enterAlwaysOn : interrupted");
+                // Restore interrupted flag
+                Thread.currentThread().interrupt();
+            }
+            if (!mStControllerAlwaysOnListenerCb.mUpdated
+                    || !mStControllerAlwaysOnListenerCb.mEnabled) {
+                Log.e(TAG, "enterAlwaysOn: Failed to set alwayson mode in 2sec");
+            }
+        }
     }
 
     private void exitAlwaysOn() {
-        if (mHasSetAlwaysOn) {
-            // stop always on
-            synchronized (mStControllerAlwaysOnListenerCb.mSync) {
-                mStControllerAlwaysOnListenerCb.mUpdated = false;
-                mNfcOemExtension.setControllerAlwaysOnMode(NfcOemExtension.DISABLE);
-                try {
-                    mStControllerAlwaysOnListenerCb.mSync.wait(2000);
-                } catch (InterruptedException e) {
-
-                }
-                if (!mStControllerAlwaysOnListenerCb.mUpdated
-                        || mStControllerAlwaysOnListenerCb.mEnabled) {
-                    Log.e(TAG, "exitAlwaysOn: Failed to clear alwayson mode in 2sec");
-                }
+        // stop always on
+        synchronized (mStControllerAlwaysOnListenerCb.mSync) {
+            mStControllerAlwaysOnListenerCb.mUpdated = false;
+            mNfcOemExtension.setControllerAlwaysOnMode(NfcOemExtension.DISABLE);
+            try {
+                mStControllerAlwaysOnListenerCb.mSync.wait(2000);
+            } catch (InterruptedException e) {
+                Log.e(TAG, "exitAlwaysOn : interrupted");
+                // Restore interrupted flag
+                Thread.currentThread().interrupt();
+            }
+            if (!mStControllerAlwaysOnListenerCb.mUpdated
+                    || mStControllerAlwaysOnListenerCb.mEnabled) {
+                Log.e(TAG, "exitAlwaysOn: Failed to clear alwayson mode in 2sec");
             }
         }
-        mHasSetAlwaysOn = false;
+
+        synchronized (mSyncDiscovery) {
+            mHasSetAlwaysOn = false;
+            mSyncDiscovery.notifyAll();
+        }
     }
 
-    private boolean goToIdle() {
+    private boolean goToIdleInternal(int dur) {
         boolean result = true;
 
         // Are we in phone ON or OFF ?
         if (mNfcAdapter.isEnabled()) {
+            boolean mustStopPolling = true;
+            synchronized (mSyncDiscovery) {
+                while (mDiscoveryState != DISC_STATE_UNMANAGED) {
+                    Log.d(TAG, "goToIdle: wait for other sequence to finish resuming (up to 10s)");
+                    try {
+                        mSyncDiscovery.wait(10000);
+                    } catch (InterruptedException e) {
+                        // This thread was interrupted, exit directly
+                        Log.e(TAG, "goToIdle: Interrupted!");
+                        Thread.currentThread().interrupt();
+                        return false;
+                    }
+                }
+                if (mIsDiscoveryStarted) {
+                    mDiscoveryState = DISC_STATE_GOING_TO_IDLE;
+                } else {
+                    mDiscoveryState = DISC_STATE_IDLE;
+                    mustStopPolling = false;
+                }
+            }
+
             // stop polling
-            mNfcOemExtension.pausePolling(0); // 0 = pause indefinitely
+            if (mustStopPolling) {
+                mNfcOemExtension.pausePolling(dur);
+            }
             mHasSetAlwaysOn = false;
         } else if (mIsPermAlwaysOnGranted) {
             enterAlwaysOn();
         } else {
+            Log.d(TAG, "goToIdle: NFC disabled and AlwaysOn permission unavailable");
             result = false;
         }
 
         return result;
     }
 
+    private boolean goToIdle() {
+        return goToIdleInternal(30000); // pause 30s max
+    }
+
+    private boolean goToIdleUnlimited() {
+        return goToIdleInternal(0); // only resume with backFromIdle
+    }
+
     private void backFromIdle() {
         // Now restore the state of NFC
         if (!mHasSetAlwaysOn) {
+            boolean mustResume = true;
+            synchronized (mSyncDiscovery) {
+                if (mDiscoveryState == DISC_STATE_UNMANAGED) {
+                    Log.d(TAG, "backFromIdle: unexpected DISC_STATE_UNMANAGED");
+                    mustResume = !mIsDiscoveryStarted;
+                } else if (mDiscoveryState == DISC_STATE_GOING_TO_IDLE) {
+                    // backFromIdle called before we finished entering idle ?
+                    Log.d(TAG, "backFromIdle: unexpected DISC_STATE_GOING_TO_IDLE");
+                    mDiscoveryState = DISC_STATE_GOING_TO_RESUME;
+                } else if (mDiscoveryState == DISC_STATE_IDLE) {
+                    if (mIsDiscoveryStarted) {
+                        Log.d(TAG, "backFromIdle: unexpected discovery ON in DISC_STATE_IDLE");
+                        mDiscoveryState = DISC_STATE_UNMANAGED;
+                        mustResume = false;
+                        mSyncDiscovery.notifyAll();
+                    } else {
+                        mDiscoveryState = DISC_STATE_GOING_TO_RESUME;
+                    }
+                } else if (mDiscoveryState == DISC_STATE_GOING_TO_RESUME) {
+                    // called twice ?
+                    Log.d(TAG, "backFromIdle: unexpected DISC_STATE_GOING_TO_RESUME");
+                } else if (mDiscoveryState == DISC_STATE_RESUMED_BEFORE_REQ) {
+                    Log.d(TAG, "backFromIdle: unexpected DISC_STATE_RESUMED_BEFORE_REQ");
+                    mustResume = false;
+                    mSyncDiscovery.notifyAll();
+                }
+            }
+
             // resume polling
-            mNfcOemExtension.resumePolling();
+            if (mustResume) {
+                mNfcOemExtension.resumePolling();
+            }
         } else if (mIsPermAlwaysOnGranted) {
             exitAlwaysOn();
         }
@@ -692,7 +849,8 @@ public final class StNfcOemExtension {
 
         // Check if permission for NFC Always On is granted
         mIsPermAlwaysOnGranted =
-                mContext.checkCallingOrSelfPermission("android.permission.CONTROLLER_ALWAYS_ON")
+                mContext.checkCallingOrSelfPermission(
+                                "android.permission.NFC_SET_CONTROLLER_ALWAYS_ON")
                         == android.content.pm.PackageManager.PERMISSION_GRANTED;
 
         if (mIsPermAlwaysOnGranted) {
@@ -720,17 +878,33 @@ public final class StNfcOemExtension {
     }
 
     public void register(Context c, StNfcOemExtensionVendorNtfCallback ntfCb) {
-        Log.d(TAG, "register: (extensions version: 25Q2-BP2A-20250727-Mainline-25W31p0)");
+        Log.d(
+                TAG,
+                "register: (extensions version: 25Q2-BP2A-20251010-Mainline-25W41p0) (#"
+                        + mRegisterCnt
+                        + ")");
         mContext = c;
         mNtfCb = ntfCb;
-        doRegister();
+        if (mRegisterCnt == 0) {
+            doRegister();
+        } else {
+            Log.d(TAG, "registered another client, overwriting context and cb");
+        }
+        mRegisterCnt++;
         Log.d(TAG, "register: done");
     }
 
     public void unregister() {
-        Log.d(TAG, "unregister");
+        Log.d(TAG, "unregister (#" + mRegisterCnt + ")");
         mNtfCb = null;
-        doUnregister();
+        if (mRegisterCnt <= 0) {
+            Log.d(TAG, "unregister: unbalanced, skip");
+            return;
+        }
+        mRegisterCnt--;
+        if (mRegisterCnt == 0) {
+            doUnregister();
+        }
         Log.d(TAG, "unregister: done");
     }
 
@@ -840,6 +1014,12 @@ public final class StNfcOemExtension {
                     case ST_PROP_RF_INTF_ACTIV_CUST_POLL_NTF:
                         commandDesc += "ST_PROP_RF_INTF_ACTIV_CUST_POLL_NTF:";
                         break;
+                    default:
+                        commandDesc +=
+                                "ST_PROP_(unknown subOid:"
+                                        + Integer.toHexString(subOid & 0xFF)
+                                        + "):";
+                        break;
                 }
                 break;
             case ST_NCI_MSG_PROP:
@@ -856,6 +1036,12 @@ public final class StNfcOemExtension {
                         break;
                     case NCI_PARAM_ID_PROP_TEMPORARY_FORCED_SAK:
                         commandDesc += "NCI_PARAM_ID_PROP_TEMPORARY_FORCED_SAK:";
+                        break;
+                    default:
+                        commandDesc +=
+                                "ST_NCI_PROP_(unknown subOid:"
+                                        + Integer.toHexString(subOid & 0xFF)
+                                        + "):";
                         break;
                 }
                 break;
@@ -884,7 +1070,11 @@ public final class StNfcOemExtension {
         }
 
         Log.d(TAG, "sendVendorCommand: " + convertCommandToString(gid, oid, subOid, payload, true));
-        mNfcAdapter.sendVendorNciMessage(NfcAdapter.MESSAGE_TYPE_COMMAND, gid, oid, newpayload);
+        try {
+            mNfcAdapter.sendVendorNciMessage(NfcAdapter.MESSAGE_TYPE_COMMAND, gid, oid, newpayload);
+        } catch (Exception e) {
+            Log.e(TAG, "sendVendorCommand: Exception e=" + e.toString());
+        }
     }
 
     /* Exchange a vendor CMD, returns the RSP if success */
@@ -899,7 +1089,7 @@ public final class StNfcOemExtension {
 
         // send the command
         synchronized (mStNfcVendorNciCb.mSync) {
-            mStNfcVendorNciCb.setExpectedRspOID(oid, false);
+            mStNfcVendorNciCb.setExpectedRspOID(gid, oid, false);
             sendVendorCommand(gid, oid, subOid, isSubOid, payload);
             rspPayload = mStNfcVendorNciCb.getExpectedRsp(1000);
         }
@@ -934,6 +1124,7 @@ public final class StNfcOemExtension {
 
     /* NCI CORE OID */
     private static final byte NCI_MSG_CORE_SET_CONFIG = 0x02;
+    private static final byte NCI_MSG_CORE_GET_CONFIG = 0x03;
 
     /**********************/
     /* ST proprietary NCI */
@@ -973,6 +1164,7 @@ public final class StNfcOemExtension {
     /* ST PROP NCI PARAM */
     public static final byte NCI_PARAM_ID_PROP_RF_SET_LISTEN_IOT_SEQ = (byte) 0xA4;
     public static final byte NCI_PARAM_ID_PROP_TEMPORARY_FORCED_SAK = (byte) 0xA5;
+    public static final byte NCI_PARAM_ID_PROP_DIS_LPTD = (byte) 0xAA;
 
     /* debug config OID */
     public static final byte ST_DEBUG_CONF_OID = (byte) 0x0F;
@@ -1016,6 +1208,9 @@ public final class StNfcOemExtension {
                         }
                     }
                 }
+                break;
+            default:
+                /* No handling */
                 break;
         }
     }
@@ -1304,7 +1499,7 @@ public final class StNfcOemExtension {
 
         // send the command
         synchronized (mStNfcVendorNciCb.mSync) {
-            mStNfcVendorNciCb.setExpectedRspOID(ST_OID, true);
+            mStNfcVendorNciCb.setExpectedRspOID(ST_GID, ST_OID, true);
             sendVendorCommand(ST_GID, ST_OID, ST_PROP_NCI_TRANSCEIVE_ADPU_GATE, true, cmd);
             rspPayload = mStNfcVendorNciCb.getExpectedRsp(1000);
 
@@ -1386,6 +1581,8 @@ public final class StNfcOemExtension {
                 return NfcSettingsAdapterImpl.UICC_ROUTE;
             case CardEmulation.PROTOCOL_AND_TECHNOLOGY_ROUTE_DEFAULT:
                 return NfcSettingsAdapterImpl.DEFAULT_ROUTE;
+            case CardEmulation.PROTOCOL_AND_TECHNOLOGY_ROUTE_NDEF_NFCEE:
+                return NfcSettingsAdapterImpl.NDEF_NFCEE_ROUTE;
             default:
                 return "";
         }
@@ -1744,31 +1941,33 @@ public final class StNfcOemExtension {
         return rspPayload;
     }
 
-    /****************** Call checkEsEFelicaSupport **********************/
-    void checkEsEFelicaSupport() {
-        byte status =
-                "1".equals(SystemProperties.get("persist.st_nfc_felica_ese"))
-                        ? (byte) 0x01
-                        : (byte) 0x00;
-
+    /****************** Call setSEFelicaCardEnabled **********************/
+    boolean setSEFelicaCardEnabled(boolean status) {
+        byte enable = (byte) (status ? 0x01 : 0x00);
         byte[] rspPayload =
                 exchangeVendorCmdRsp(
                         ST_GID,
                         ST_OID,
                         ST_PROP_SET_FELICA_CARD_ENABLED,
                         true,
-                        new byte[] {status},
+                        new byte[] {enable},
                         false);
-
         // Check response from the chip.
         if (rspPayload == null) {
-            Log.e(TAG, "checkEsEFelicaSupport: error, no rsp");
-            return;
+            Log.e(TAG, "setSEFelicaCardEnabled: error, no rsp");
+            return false;
         }
+        if (rspPayload[1] != 0x00) {
+            Log.e(TAG, "setSEFelicaCardEnabled: failed RSP");
+            return false;
+        }
+
+        return true;
     }
 
     /****************** Call setRfCustomPollingFrames **********************/
     boolean setRfCustomPollingFrames(byte[] rf_frames) {
+        Log.d(TAG, "setRfCustomPollingFrames");
         goToIdle();
         byte[] rspPayload =
                 exchangeVendorCmdRsp(
@@ -1785,6 +1984,53 @@ public final class StNfcOemExtension {
         }
 
         return true;
+    }
+
+    /****************** Call setTagDetectorStatus **********************/
+    boolean setTagDetectorStatus(boolean status) {
+        Log.d(TAG, "setTagDetectorStatus: status=" + status);
+        goToIdle();
+        byte[] payload = {
+            0x01, NCI_PARAM_ID_PROP_DIS_LPTD, 0x01, (status ? (byte) 0x00 : (byte) 0x01)
+        };
+        byte[] rsp =
+                exchangeVendorCmdRsp(
+                        NCI_GID_CORE, NCI_MSG_CORE_SET_CONFIG, (byte) 0x00, false, payload, true);
+        backFromIdle();
+
+        // Check response from the chip.
+        if (rsp == null) {
+            Log.e(TAG, "setRfCustomPollingFrames: error, no rsp");
+            return false;
+        }
+
+        return true;
+    }
+
+    /****************** Call getTagDetectorStatus **********************/
+    boolean getTagDetectorStatus() {
+        Log.d(TAG, "getTagDetectorStatus");
+        goToIdle();
+        byte[] payload = {0x01, NCI_PARAM_ID_PROP_DIS_LPTD};
+        byte[] rsp =
+                exchangeVendorCmdRsp(
+                        NCI_GID_CORE, NCI_MSG_CORE_GET_CONFIG, (byte) 0x00, false, payload, true);
+        backFromIdle();
+        // Check response from the chip.
+        if (rsp == null) {
+            Log.e(TAG, "setRfCustomPollingFrames: error, no rsp");
+            return false;
+        }
+        if (rsp.length < 5) {
+            Log.e(TAG, "setRfCustomPollingFrames: error, wrong length");
+            return false;
+        }
+        if (rsp[0] != 0x00) {
+            Log.e(TAG, "setRfCustomPollingFrames: failed RSP");
+            return false;
+        }
+
+        return (rsp[4] == 0x00 ? true : false);
     }
 
     /*********************************************************/
@@ -1815,7 +2061,11 @@ public final class StNfcOemExtension {
                                 getPipeList();
                                 getManufacturerData();
                                 getFirmwareVersion();
-                                checkEsEFelicaSupport();
+                            }
+                            synchronized (mSyncDiscovery) {
+                                mDiscoveryState = DISC_STATE_UNMANAGED;
+                                mHasSetAlwaysOn = false;
+                                mSyncDiscovery.notifyAll();
                             }
                             break;
                         case MSG_PROCESS_STATE_TURNING_OFF:
@@ -1823,6 +2073,11 @@ public final class StNfcOemExtension {
                             mManufacturerData = null;
                             /* In other states, don't let 3rd party call extensions */
                             mLibStPropNciVersion = -1;
+                            synchronized (mSyncDiscovery) {
+                                mDiscoveryState = DISC_STATE_UNMANAGED;
+                                mHasSetAlwaysOn = false;
+                                mSyncDiscovery.notifyAll();
+                            }
                             break;
                         default:
                             break;

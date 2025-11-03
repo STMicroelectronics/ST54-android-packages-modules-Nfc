@@ -77,9 +77,8 @@ public class NfcWalletAdapterImpl extends INfcWalletAdapter.Stub {
     }
 
     public boolean setSEFelicaCardEnabled(boolean status) {
-        // TODO
         Log.i(TAG, "setSEFelicaCardEnabled(" + status + ")");
-        return false;
+        return mStNfcOemExtension.setSEFelicaCardEnabled(status);
     }
 
     public boolean registerNfceeActionNtfCallback(INfceeActionNtfCallback cb) {

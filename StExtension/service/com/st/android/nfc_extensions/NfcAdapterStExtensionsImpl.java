@@ -32,11 +32,20 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
     private NfcWalletAdapterImpl mWalletImpl;
     private final INfcSettingsAdapter.Stub mSettingsBinder;
 
-    public NfcAdapterStExtensionsImpl(StNfcOemExtension e) {
+    private NfcAdapterStExtensionsImpl(StNfcOemExtension e) {
         mStNfcOemExtension = e;
         mWalletImpl = new NfcWalletAdapterImpl(mStNfcOemExtension);
         mWalletBinder = mWalletImpl;
         mSettingsBinder = new NfcSettingsAdapterImpl(mStNfcOemExtension);
+    }
+
+    private static NfcAdapterStExtensionsImpl INSTANCE;
+
+    public static NfcAdapterStExtensionsImpl getInstance(StNfcOemExtension e) {
+        if (INSTANCE == null) {
+            INSTANCE = new NfcAdapterStExtensionsImpl(e);
+        }
+        return INSTANCE;
     }
 
     public NfcWalletAdapterImpl getWalletImpl() {
@@ -323,5 +332,15 @@ public class NfcAdapterStExtensionsImpl extends INfcAdapterStExtensions.Stub {
     @Override
     public byte[] sendVendorNciMessage(byte[] cmd, int discFlags) {
         return mStNfcOemExtension.sendVendorNciMessage(cmd, discFlags);
+    }
+
+    @Override
+    public void setTagDetectorStatus(boolean status) {
+        mStNfcOemExtension.setTagDetectorStatus(status);
+    }
+
+    @Override
+    public boolean getTagDetectorStatus() {
+        return mStNfcOemExtension.getTagDetectorStatus();
     }
 }

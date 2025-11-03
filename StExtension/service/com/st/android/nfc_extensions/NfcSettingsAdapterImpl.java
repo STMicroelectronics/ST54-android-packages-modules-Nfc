@@ -131,6 +131,7 @@ public class NfcSettingsAdapterImpl extends INfcSettingsAdapter.Stub {
     public static final String UICC_ROUTE = "UICC";
     public static final String ESE_ROUTE = "eSE";
     public static final String HCE_ROUTE = "HCE";
+    public static final String NDEF_NFCEE_ROUTE = "NDEF-NFCEE";
     public static final String DEFAULT_ROUTE = "Default";
 
     int convertRouteToInt(String route) {
@@ -142,6 +143,8 @@ public class NfcSettingsAdapterImpl extends INfcSettingsAdapter.Stub {
             return CardEmulation.PROTOCOL_AND_TECHNOLOGY_ROUTE_DH;
         } else if (route.contains(NfcSettingsAdapterImpl.DEFAULT_ROUTE)) {
             return CardEmulation.PROTOCOL_AND_TECHNOLOGY_ROUTE_DEFAULT;
+        } else if (route.contains(NfcSettingsAdapterImpl.NDEF_NFCEE_ROUTE)) {
+            return CardEmulation.PROTOCOL_AND_TECHNOLOGY_ROUTE_NDEF_NFCEE;
         }
         return CardEmulation.PROTOCOL_AND_TECHNOLOGY_ROUTE_UNSET;
     }

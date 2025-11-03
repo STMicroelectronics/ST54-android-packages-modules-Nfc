@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <nfc_config.h>
 #include <android/log.h>
@@ -100,6 +101,22 @@ static void nves_stpropnci_cb(bool dir_to_nfcc, uint8_t* payload,
   } else {
     /* Emulate cb from HAL */
     nves_dump(true, false, payload, payloadlen);
+
+    /* If we send a CORE_RESET_NTF (abnormal),
+      close HAL to make sure no further message will be sent. */
+    if ((payloadlen >= 4) && (payload[0] == 0x60) && (payload[1] == 0x00) &&
+        ((payload[3] == 0x00) || (payload[3] >= 0xA0))) {
+      LOG(ERROR) << StringPrintf("%s: CORE_RESET_NTF(abnormal), close HAL",
+                                 __func__);
+      if (pVendorExtnCb->hidlHal != nullptr) {
+        pVendorExtnCb->hidlHal->close();
+      } else if (pVendorExtnCb->aidlHal != nullptr) {
+        pVendorExtnCb->aidlHal->close(
+            ::aidl::android::hardware::nfc::NfcCloseType::DISABLE);
+      } else {
+        LOG(ERROR) << StringPrintf("%s: no HAL interface available", __func__);
+      }
+    }
     if (pVendorExtnCb->pDataCback != nullptr) {
       LOG(VERBOSE) << StringPrintf("%s: to STACK", __func__);
       pVendorExtnCb->pDataCback(payloadlen, payload);
@@ -244,6 +261,15 @@ extern "C" bool vendor_nfc_init(VendorExtnCb* cb) {
   if (!stpropnci_init(2, nves_stpropnci_cb)) {
     LOG(ERROR) << StringPrintf("%s: Failed to init stpropnci", __func__);
     ret = false;
+  }
+
+  // Set the Felica property if sysprop is set
+  if (::android::base::GetIntProperty("persist.st_nfc_felica_ese", 0)) {
+    LOG(DEBUG) << StringPrintf(
+        "%s: persist.st_nfc_felica_ese found, configure Felica support",
+        __func__);
+    stpropnci_change_config(STPROPNCI_CFG_FELICA_ESE_SUPPORT,
+                            STPROPNCI_CFG__true);
   }
 
   (void)pthread_mutex_unlock(&mtx);

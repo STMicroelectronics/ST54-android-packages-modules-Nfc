@@ -53,8 +53,8 @@ public class StNfcExtensionService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        mStNfcOemExtension = new StNfcOemExtension();
-        mNfcAdapterStExtensionsImpl = new NfcAdapterStExtensionsImpl(mStNfcOemExtension);
+        mStNfcOemExtension = StNfcOemExtension.getInstance();
+        mNfcAdapterStExtensionsImpl = NfcAdapterStExtensionsImpl.getInstance(mStNfcOemExtension);
         mINfcAdapterStExtensionsBinder = mNfcAdapterStExtensionsImpl;
         mStNfcOemExtension.register(this, new srvStNfcOemExtensionVendorNtfCallback());
     }

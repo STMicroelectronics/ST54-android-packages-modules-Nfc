@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@Deprecated
 public class NfcSettingsAdapter {
     private static INfcSettingsAdapter mNfcSettingsInterface = null;
 
@@ -153,6 +152,7 @@ public class NfcSettingsAdapter {
     public static final String UICC_ROUTE = "UICC";
     public static final String ESE_ROUTE = "eSE";
     public static final String HCE_ROUTE = "HCE";
+    public static final String NDEF_NFCEE_ROUTE = "NDEF-NFCEE";
     public static final String DEFAULT_ROUTE = "Default";
     public static final String UNSET_ROUTE = "Unset";
 
@@ -205,6 +205,7 @@ public class NfcSettingsAdapter {
             if ((UICC_ROUTE.contentEquals(routeValue) == false)
                     && (ESE_ROUTE.contentEquals(routeValue) == false)
                     && (HCE_ROUTE.contentEquals(routeValue) == false)
+                    && (NDEF_NFCEE_ROUTE.contentEquals(routeValue) == false)
                     && (DEFAULT_ROUTE.contentEquals(routeValue) == false)
                     && (UNSET_ROUTE.contentEquals(routeValue) == false)) {
                 Log.e(TAG, "setUserDefaultRoutes:" + routeValue + " does not exists");
